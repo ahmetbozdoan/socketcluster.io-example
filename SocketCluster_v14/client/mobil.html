@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>Socket Deneme - Mobil</title>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
+		integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+</head>
+
+<body>
+
+	<div class="container mt-5">
+		<div class="row row-cols-2">
+			<div class="col">
+				<h1>Vcloud Mobil</h1>
+
+				<div class="form-group">
+					<label>Kullanıcı ID</label>
+					<input type="text" class="form-control" id="userId" value="fdb64c50abfd41b0a3d48fef7fa1d768">
+				</div>
+
+				<button type="button" id="socketConnect" class="btn btn-primary">Mobil Soketi Dinle</button>
+
+				<div class="form-group" style="margin-top: 20px">
+					<label>Kare Kod</label>
+					<input type="text" class="form-control" id="QRCode" value="M80237">
+				</div>
+
+				<button type="button" id="QRRead" class="btn btn-primary">QR OKUT</button>
+			</div>
+			<div class="col">
+				LOG:
+				<pre id="log" style="height: 600px"></pre>
+			</div>
+		</div>
+
+		<div class="modal" tabindex="-1" role="dialog">
+			<div class="modal-dialog" role="document">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h5 class="modal-title">Modal title</h5>
+						<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+							<span aria-hidden="true">&times;</span>
+						</button>
+					</div>
+					<div class="modal-body">
+						<p>Modal body text goes here.</p>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-primary">Save changes</button>
+						<button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal fade" data-backdrop="static" id="myModal2" tabindex="-1" role="dialog">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title"></h5>
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+				</div>
+				<div class="modal-body">
+					<p>Bu içeriği Web'de açmak ister misin?</p>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary modal-btn-cancel" data-dismiss="modal">Mobilden devam et</button>
+					<button type="button" class="btn btn-primary modal-btn-ok">Web'de aç</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script>
+	(function () {
+		if (!console) {
+			console = {};
+		}
+		var old = console.log;
+		var logger = document.getElementById('log');
+		console.log = function (title, message) {
+			if (typeof message == 'object') {
+				logger.innerHTML += title + ': ' + (JSON && JSON.stringify ? JSON.stringify(message) : String(message)) + '<br />';
+			} else {
+				logger.innerHTML += title + ': ' + message + '<br />';
+			}
+		}
+	})();
+	</script>
+
+	<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+	<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" crossorigin="anonymous"></script>
+	<script src="socketcluster-clientv14/socketcluster.min.js"></script>
+	<script>
+		var options = {
+			hostname: 'localhost',
+			port: 8000
+		};
+		// Initiate the connection to the server
+		var socket = socketCluster.create(options);
+
+		let isConnectWeb = false;
+
+		SessionData = {
+			data: {
+				qrcode: '',
+			},
+			channels: {
+				'private': null
+			},
+			event: {}
+		};
+
+		$("#socketConnect").on("click",function(){
+			SessionData.channels.private = 'mobil_' + document.getElementById('userId').value;
+
+			let privateChannel = socket.subscribe(SessionData.channels.private);
+			console.log('subscribe:channel:private:' + SessionData.channels.private, privateChannel.state);
+
+			privateChannel.watch(function (message) {
+				console.log("message:session:", message)
+
+				if (message.data.event.name == 'socketConnected') {
+					console.log("status:", "Web bağlı!");
+					isConnectWeb = true;
+
+					$("#myModal2").modal('show');
+				}
+			});
+		});
+
+		$("#QRRead").on("click",function(){
+			isConnectWeb = false;
+
+			SessionData.event = {
+				name: "checkSocket"
+			}
+			SessionData.channels.private = "web_" + document.getElementById('userId').value;
+			socket.emit('QRSocket', SessionData);
+
+			console.log("transmited:QRSocket", SessionData);
+
+			setTimeout(() => {
+				if (!isConnectWeb){
+					console.log("BİLGİ:", "Mobilden devam ediyor.")
+				}
+			}, 500);
+		});
+
+		$(".modal-btn-cancel").on("click", function(){
+			console.log("BİLGİ:", "Mobilden devam ediyor.")
+		});
+
+		$(".modal-btn-ok").on("click", function(){
+			$("#myModal2").modal('hide');
+
+			SessionData.event = {
+				name: "QRCode"
+			}
+			SessionData.channels.private = "web_" + document.getElementById('userId').value;
+			SessionData.data.qrcode = document.getElementById('QRCode').value;
+			socket.emit('QRSocket', SessionData);
+
+			console.log("transmited:QRSocket", SessionData);
+			console.log("BİLGİ:", "Web de açıldı!")
+		});
+
+	</script>
+
+
+</body>
+
+</html>

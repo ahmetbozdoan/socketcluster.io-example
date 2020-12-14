@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>Socket Deneme - Web</title>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
+		integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+</head>
+
+<body>
+
+	<div class="container mt-5">
+		<div class="row row-cols-2">
+			<div class="col">
+				<h1>Vcloud Web</h1>
+
+				<div class="form-group">
+					<label>Kullanıcı ID</label>
+					<input type="text" class="form-control" id="userId" value="fdb64c50abfd41b0a3d48fef7fa1d768">
+				</div>
+
+				<button type="button" id="socketConnect" class="btn btn-primary">Web Soketi Dinle</button>
+			</div>
+			<div class="col">
+				LOG:
+				<pre id="log" style="height: 600px"></pre>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal fade" id="myModal" tabindex="-1" role="dialog">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h5 class="modal-title"></h5>
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close">
+						<span aria-hidden="true">&times;</span>
+					</button>
+				</div>
+				<div class="modal-body">
+					<p><b><span id="QRCode"></span></b> kodlu içerik açıldı!</p>
+				</div>
+			</div>
+		</div>
+	</div>
+
+
+	<script>
+	(function () {
+		if (!console) {
+			console = {};
+		}
+		var old = console.log;
+		var logger = document.getElementById('log');
+		console.log = function (title, message) {
+			if (typeof message == 'object') {
+				logger.innerHTML += title + ': ' + (JSON && JSON.stringify ? JSON.stringify(message) : String(message)) + '<br />';
+			} else {
+				logger.innerHTML += title + ': ' + message + '<br />';
+			}
+		}
+	})();
+	</script>
+
+	<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+	<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" crossorigin="anonymous"></script>
+	<script src="node_modules/socketcluster-client/socketcluster-client.js"></script>
+	<script>
+		let client = socketClusterClient.create({
+			hostname: 'localhost',
+			port: 8000
+		});
+
+		SessionData = {
+			data: {},
+			channels: {
+				'private': null
+			},
+			event: {
+				name: "socketConnected"
+			}
+		};
+
+		(async () => {
+			await client.listener('connect').once();
+			SessionData.data.client_id = client.id;
+			console.log("connected:clientSocketId", SessionData.data.client_id);
+		})();
+
+
+		$("#socketConnect").on("click",function(){
+			(async () => {
+				SessionData.channels.private = 'web_' + document.getElementById('userId').value;
+
+				let privateChannel = client.subscribe(SessionData.channels.private);
+				console.log('subscribe:private:' + SessionData.channels.private, privateChannel.state);
+
+				setTimeout(function(){
+					client.unsubscribe(SessionData.channels.private)
+					console.log('unsubscribe:private:' + SessionData.channels.private, privateChannel.state);
+				},2000);
+
+				for await (let message of privateChannel) {
+					console.log("message:private:", message)
+
+					if (message.data.event.name == 'checkSocket') {
+						SessionData.channels.private = 'mobil_' + document.getElementById('userId').value;
+						client.transmit('QRSocket', SessionData);
+
+						console.log("BİLGİ", "Soket bağlı mesajı gönderildi.");
+					} else if (message.data.event.name == 'QRCode') {
+						console.log("QR KOD açılıyor...", message.data.data.qrcode);
+
+						$("#QRCode").text(message.data.data.qrcode);
+						$("#myModal").modal("show");
+					}
+				}
+			})();
+		});
+	</script>
+
+
+</body>
+
+</html>
